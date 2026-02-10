@@ -1,34 +1,31 @@
-import Link from "next/link";
+"use client";
 
-const navItems = [
-  { href: "/portal/termine", label: "Meine Termine" },
-  { href: "/portal/info", label: "Infos" },
-];
+import { usePathname } from "next/navigation";
+import { PortalNav } from "@/components/layout/portal-nav";
+import { ToastContainer } from "@/components/ui/toast";
 
 export default function PortalLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const isLoginPage = pathname === "/portal";
+
+  if (isLoginPage) {
+    return (
+      <>
+        {children}
+        <ToastContainer />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-white">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <span className="font-serif text-lg font-semibold">Hautschimmer</span>
-          <nav className="flex gap-4">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-sm text-foreground/60 transition-colors hover:text-primary"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </header>
-      <main className="mx-auto max-w-2xl p-4">{children}</main>
+      <PortalNav />
+      <main className="mx-auto max-w-2xl p-4 pt-6">{children}</main>
+      <ToastContainer />
     </div>
   );
 }
