@@ -131,7 +131,7 @@ export const CustomerForm = ({ customer, onSuccess, onCancel }: CustomerFormProp
           placeholder="Standort wählen"
           options={[
             { value: 'neumarkt', label: 'Neumarkt' },
-            { value: 'kw', label: 'Königstein-Wernberg' },
+            { value: 'kw', label: 'Königs Wusterhausen' },
           ]}
         />
       </div>

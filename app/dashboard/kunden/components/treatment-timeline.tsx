@@ -12,10 +12,21 @@ interface TreatmentTimelineProps {
   refreshKey?: number;
 }
 
+interface TimelineEntryData {
+  note_type?: string;
+  notes?: string;
+  treatment_name?: string;
+  status?: string;
+  source?: string;
+  [key: string]: unknown;
+}
+
 interface TimelineEntry {
   id: string;
   date: string;
   type: string;
+  data: TimelineEntryData;
+  // Flat fields (for backward compat if the API returns flat format)
   note_type?: string;
   notes?: string;
   treatment_name?: string;
@@ -96,34 +107,42 @@ export const TreatmentTimeline = ({ customerId, refreshKey }: TreatmentTimelineP
     <div className="relative">
       <div className="absolute left-5 top-0 bottom-0 w-px bg-border" />
       <div className="space-y-6">
-        {entries.map((entry) => (
-          <div key={entry.id} className="relative flex gap-4 pl-2">
-            <div className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white border border-border">
-              <div className="h-2.5 w-2.5 rounded-full bg-primary" />
-            </div>
-            <div className="flex-1 pb-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-foreground">
-                  {entry.treatment_name || noteTypeLabels[entry.note_type || ''] || 'Eintrag'}
-                </span>
-                {entry.note_type && (
-                  <Badge variant={noteTypeVariants[entry.note_type] || 'default'}>
-                    {noteTypeLabels[entry.note_type] || entry.note_type}
-                  </Badge>
+        {entries.map((entry) => {
+          const d = entry.data || {};
+          const noteType = d.note_type || entry.note_type;
+          const notes = d.notes || entry.notes;
+          const treatmentName = d.treatment_name || entry.treatment_name;
+          const source = d.source || entry.source;
+
+          return (
+            <div key={entry.id} className="relative flex gap-4 pl-2">
+              <div className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white border border-border">
+                <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+              </div>
+              <div className="flex-1 pb-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-foreground">
+                    {treatmentName || noteTypeLabels[noteType || ''] || 'Eintrag'}
+                  </span>
+                  {noteType && (
+                    <Badge variant={noteTypeVariants[noteType] || 'default'}>
+                      {noteTypeLabels[noteType] || noteType}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-foreground/50">
+                  {entry.date ? formatDate(entry.date) : ''}
+                  {source && source !== 'manual' && ` · via ${source}`}
+                </p>
+                {notes && (
+                  <p className="mt-1.5 text-sm text-foreground/70 leading-relaxed">
+                    {notes}
+                  </p>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-foreground/50">
-                {entry.date ? formatDate(entry.date) : ''}
-                {entry.source && entry.source !== 'manual' && ` · via ${entry.source}`}
-              </p>
-              {entry.notes && (
-                <p className="mt-1.5 text-sm text-foreground/70 leading-relaxed">
-                  {entry.notes}
-                </p>
-              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

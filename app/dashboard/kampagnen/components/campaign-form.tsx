@@ -24,10 +24,25 @@ const STEP_LABELS: Record<Step, string> = {
   4: 'Vorschau & Senden',
 };
 
+function sanitizeHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?>/gi, '')
+    .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/\bon\w+\s*=\s*[^\s>]*/gi, '')
+    .replace(/javascript\s*:/gi, '')
+    .replace(/data\s*:[^,]*;base64/gi, '');
+}
+
 export const CampaignForm = ({ onClose, onCreated }: CampaignFormProps) => {
   const [step, setStep] = useState<Step>(1);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [sending, setSending] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [recipientCount, setRecipientCount] = useState<number | null>(null);
 
   // Step 1
   const [name, setName] = useState('');
@@ -65,40 +80,86 @@ export const CampaignForm = ({ onClose, onCreated }: CampaignFormProps) => {
     }
   };
 
-  const handleSend = async () => {
-    setSending(true);
+  const buildCampaignPayload = () => {
+    const segmentFilter: Record<string, unknown> = {};
+    if (locationFilter !== 'all') segmentFilter.location = locationFilter;
+    if (onlyOptIn) segmentFilter.email_opt_in = true;
+
+    const rawHtml =
+      contentMode === 'template' && selectedTemplate
+        ? selectedTemplate.body_html
+        : customHtml;
+    const bodyHtml = rawHtml ? sanitizeHtml(rawHtml) : rawHtml;
+
+    return {
+      name,
+      subject,
+      body_html: bodyHtml,
+      template_id: contentMode === 'template' ? selectedTemplateId : null,
+      segment_filter: segmentFilter,
+      status: 'draft' as const,
+    };
+  };
+
+  const handleSaveDraft = async () => {
+    setSavingDraft(true);
     try {
       const supabase = getSupabaseClient();
+      const payload = buildCampaignPayload();
 
-      // Build segment filter
-      const segmentFilter: Record<string, unknown> = {};
-      if (locationFilter !== 'all') segmentFilter.location = locationFilter;
-      if (onlyOptIn) segmentFilter.email_opt_in = true;
-
-      // Build body HTML
-      const bodyHtml =
-        contentMode === 'template' && selectedTemplate
-          ? selectedTemplate.body_html
-          : customHtml;
-
-      // Insert campaign into DB
-      const { data: campaign, error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .schema('crm')
         .from('campaigns')
-        .insert({
-          name,
-          subject,
-          body_html: bodyHtml,
-          template_id: contentMode === 'template' ? selectedTemplateId : null,
-          segment_filter: segmentFilter,
-          status: 'draft',
-        })
+        .insert(payload)
         .select()
         .single();
 
       if (insertError) throw insertError;
 
-      // Send the campaign
+      showToast('Entwurf gespeichert', 'success');
+      onCreated();
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : 'Fehler beim Speichern',
+        'error'
+      );
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleConfirmSend = async () => {
+    // Estimate recipients
+    try {
+      const supabase = getSupabaseClient();
+      let query = supabase.schema('crm').from('customers').select('id', { count: 'exact', head: true });
+      if (locationFilter !== 'all') query = query.eq('location', locationFilter);
+      if (onlyOptIn) query = query.eq('email_opt_in', true);
+      query = query.not('email', 'is', null);
+      const { count } = await query;
+      setRecipientCount(count ?? 0);
+    } catch {
+      setRecipientCount(null);
+    }
+    setShowConfirm(true);
+  };
+
+  const handleSend = async () => {
+    setShowConfirm(false);
+    setSending(true);
+    try {
+      const supabase = getSupabaseClient();
+      const payload = buildCampaignPayload();
+
+      const { data: campaign, error: insertError } = await supabase
+        .schema('crm')
+        .from('campaigns')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
       const result = await sendCampaign(campaign.id);
       if (!result.ok) throw new Error(result.error || 'Senden fehlgeschlagen');
 
@@ -306,10 +367,11 @@ export const CampaignForm = ({ onClose, onCreated }: CampaignFormProps) => {
                 <div
                   className="prose prose-sm max-h-60 overflow-y-auto"
                   dangerouslySetInnerHTML={{
-                    __html:
+                    __html: sanitizeHtml(
                       contentMode === 'custom'
                         ? customHtml
-                        : selectedTemplate?.body_html || '',
+                        : selectedTemplate?.body_html || ''
+                    ),
                   }}
                 />
               </div>
@@ -317,6 +379,38 @@ export const CampaignForm = ({ onClose, onCreated }: CampaignFormProps) => {
           </div>
         )}
       </Card>
+
+      {/* Confirmation Modal */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="font-serif text-lg font-semibold text-foreground">
+              Kampagne senden?
+            </h3>
+            <p className="mt-2 text-sm text-foreground/60">
+              {recipientCount !== null
+                ? `Kampagne an ${recipientCount} Empfaenger senden?`
+                : 'Kampagne wirklich senden?'}
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowConfirm(false)}
+              >
+                Abbrechen
+              </Button>
+              <Button
+                size="sm"
+                disabled={sending}
+                onClick={handleSend}
+              >
+                {sending ? 'Wird gesendet...' : 'Senden'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Navigation Buttons */}
       <div className="flex justify-between">
@@ -332,12 +426,21 @@ export const CampaignForm = ({ onClose, onCreated }: CampaignFormProps) => {
               Weiter
             </Button>
           ) : (
-            <Button
-              disabled={sending}
-              onClick={handleSend}
-            >
-              {sending ? 'Wird gesendet...' : 'Kampagne senden'}
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                disabled={savingDraft || sending}
+                onClick={handleSaveDraft}
+              >
+                {savingDraft ? 'Speichert...' : 'Als Entwurf speichern'}
+              </Button>
+              <Button
+                disabled={sending || savingDraft}
+                onClick={handleConfirmSend}
+              >
+                {sending ? 'Wird gesendet...' : 'Kampagne senden'}
+              </Button>
+            </>
           )}
         </div>
       </div>

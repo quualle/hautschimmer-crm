@@ -310,16 +310,22 @@ export default function KalenderPage() {
           });
           setAppointments(data);
         } else {
-          // Load whole week
-          const promises = Array.from({ length: 7 }, (_, i) => {
-            const day = addDays(weekStart, i);
-            return getAppointments({
-              date: formatDateISO(day),
-              location: locationFilter !== 'all' ? locationFilter : undefined,
-            });
-          });
-          const results = await Promise.all(promises);
-          setAppointments(results.flat());
+          // Load whole week in a single query
+          const weekEnd = addDays(weekStart, 6);
+          const supabase = (await import('@/lib/api')).getSupabaseClient();
+          let query = supabase
+            .schema('crm')
+            .from('appointments')
+            .select('*, customer:customers(*), treatment:treatments(*)')
+            .gte('date', formatDateISO(weekStart))
+            .lte('date', formatDateISO(weekEnd));
+          if (locationFilter !== 'all') {
+            query = query.eq('location', locationFilter);
+          }
+          query = query.order('start_time', { ascending: true });
+          const { data, error: weekError } = await query;
+          if (weekError) throw weekError;
+          setAppointments((data as Appointment[]) || []);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Fehler beim Laden');

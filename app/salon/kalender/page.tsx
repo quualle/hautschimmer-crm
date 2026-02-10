@@ -40,7 +40,7 @@ export default function SalonKalenderPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const pin = sessionStorage.getItem("salon_pin");
+    const pin = sessionStorage.getItem("salon_token");
     if (!pin) {
       router.replace("/salon");
       return;

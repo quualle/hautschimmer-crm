@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const tabItems = [
@@ -28,6 +28,12 @@ const tabItems = [
 
 export const SalonNav = () => {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLock = () => {
+    sessionStorage.clear();
+    router.push('/salon');
+  };
 
   return (
     <nav className="flex border-t border-border bg-white">
@@ -48,6 +54,17 @@ export const SalonNav = () => {
           </Link>
         );
       })}
+      <button
+        onClick={handleLock}
+        className="flex flex-1 flex-col items-center justify-center gap-1 py-3 text-xs font-medium text-foreground/40 transition-colors hover:text-foreground/60"
+        style={{ minHeight: 56 }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+        Sperren
+      </button>
     </nav>
   );
 };

@@ -23,6 +23,7 @@ export default function PortalTerminePage() {
   const [loading, setLoading] = useState(true);
   const [showPast, setShowPast] = useState(false);
   const [noCustomer, setNoCustomer] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadAppointments();
@@ -81,8 +82,10 @@ export default function PortalTerminePage() {
 
       setUpcoming(upcomingList);
       setPast(pastList);
-    } catch {
-      // silently fail
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Termine konnten nicht geladen werden. Bitte versuchen Sie es erneut.'
+      );
     }
     setLoading(false);
   };
@@ -105,6 +108,27 @@ export default function PortalTerminePage() {
           {[1, 2].map((i) => (
             <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted" />
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div>
+        <h1 className="mb-6 font-serif text-2xl font-semibold">Meine Termine</h1>
+        <div className="rounded-2xl border border-danger/30 bg-danger/5 p-6 text-center">
+          <p className="text-sm text-danger">{error}</p>
+          <button
+            onClick={() => {
+              setError(null);
+              setLoading(true);
+              loadAppointments();
+            }}
+            className="mt-4 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+          >
+            Erneut versuchen
+          </button>
         </div>
       </div>
     );

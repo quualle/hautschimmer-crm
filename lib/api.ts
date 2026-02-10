@@ -244,6 +244,44 @@ export async function getCampaigns(): Promise<Campaign[]> {
   return data as Campaign[];
 }
 
+// ========== Birthday APIs ==========
+
+export async function getUpcomingBirthdays(): Promise<
+  import('./types').BirthdayEntry[]
+> {
+  const supabase = getSupabaseClient();
+  const today = new Date();
+  const results: import('./types').BirthdayEntry[] = [];
+
+  // Fetch all customers with a date_of_birth
+  const { data, error } = await supabase
+    .schema('crm')
+    .from('customers')
+    .select('id, first_name, last_name, date_of_birth')
+    .not('date_of_birth', 'is', null);
+  if (error) throw error;
+
+  // Filter to birthdays within the next 7 days (client-side month/day comparison)
+  for (const c of data || []) {
+    if (!c.date_of_birth) continue;
+    const dob = new Date(c.date_of_birth);
+    // Build this year's birthday
+    const birthday = new Date(
+      today.getFullYear(),
+      dob.getMonth(),
+      dob.getDate()
+    );
+    // If birthday already passed this year, check next year
+    const diffMs = birthday.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays >= 0 && diffDays <= 7) {
+      results.push(c as import('./types').BirthdayEntry);
+    }
+  }
+
+  return results;
+}
+
 // ========== Auth ==========
 
 export async function logout() {

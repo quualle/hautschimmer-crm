@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { getSupabaseClient } from "@/lib/api";
 
 const PIN_LENGTH = 4;
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
@@ -40,16 +39,21 @@ export default function SalonPinPage() {
   const verifyPin = async (entered: string) => {
     setLoading(true);
     try {
-      const supabase = getSupabaseClient();
-      const { data, error: dbError } = await supabase
-        .schema("crm")
-        .from("salon_access")
-        .select("id, name, location")
-        .eq("pin_hash", entered)
-        .eq("active", true)
-        .maybeSingle();
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-      if (dbError || !data) {
+      const res = await fetch(`${supabaseUrl}/functions/v1/salon-verify-pin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: supabaseAnonKey,
+        },
+        body: JSON.stringify({ pin: entered }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.session_token) {
         setError("Ungueltiger PIN");
         setShake(true);
         setTimeout(() => {
@@ -60,9 +64,9 @@ export default function SalonPinPage() {
         return;
       }
 
-      sessionStorage.setItem("salon_pin", entered);
-      sessionStorage.setItem("salon_name", data.name);
-      sessionStorage.setItem("salon_location", data.location);
+      sessionStorage.setItem("salon_token", json.session_token);
+      sessionStorage.setItem("salon_name", json.name || "Salon");
+      sessionStorage.setItem("salon_location", json.location || "neumarkt");
       router.push("/salon/buchen");
     } catch {
       setError("Verbindungsfehler");

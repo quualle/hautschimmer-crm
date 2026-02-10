@@ -9,7 +9,7 @@ export default function SalonBuchenPage() {
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-    const pin = sessionStorage.getItem("salon_pin");
+    const pin = sessionStorage.getItem("salon_token");
     if (!pin) {
       router.replace("/salon");
     } else {

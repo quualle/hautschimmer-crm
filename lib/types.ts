@@ -189,3 +189,11 @@ export type AppointmentStatus = Appointment['status'];
 
 /** Note type alias */
 export type NoteType = PatientRecord['note_type'];
+
+/** Birthday entry for upcoming birthdays widget */
+export interface BirthdayEntry {
+  id: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string;
+}

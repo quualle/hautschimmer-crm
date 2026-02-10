@@ -16,7 +16,7 @@ export const PortalNav = () => {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/login');
+    router.push('/portal');
   };
 
   return (

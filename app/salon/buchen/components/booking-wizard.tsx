@@ -6,7 +6,6 @@ import {
   searchCustomers,
   getTreatments,
   getAppointments,
-  getSupabaseClient,
 } from "@/lib/api";
 import type { CustomerSearchResult, Treatment, Appointment } from "@/lib/types";
 import { showToast } from "@/hooks/use-toast";
@@ -97,12 +96,18 @@ export const BookingWizard = () => {
     }, 300);
   }, [searchQuery]);
 
-  // Load treatments when entering step 2
+  // Load treatments when entering step 2, filtered by location
   useEffect(() => {
     if (step === 2 && treatments.length === 0) {
       setTreatmentsLoading(true);
+      const currentLocation = sessionStorage.getItem("salon_location") || "neumarkt";
       getTreatments()
-        .then(setTreatments)
+        .then((all) => {
+          const filtered = all.filter(
+            (t) => !t.available_at || t.available_at.length === 0 || t.available_at.includes(currentLocation)
+          );
+          setTreatments(filtered);
+        })
         .catch(() => showToast("Behandlungen konnten nicht geladen werden", "error"))
         .finally(() => setTreatmentsLoading(false));
     }
@@ -139,27 +144,36 @@ export const BookingWizard = () => {
     setBooking(true);
     try {
       const location = sessionStorage.getItem("salon_location") || "neumarkt";
-      const salonName = sessionStorage.getItem("salon_name") || "Salon";
+      const sessionToken = sessionStorage.getItem("salon_token") || "";
       const duration = selected.treatment.duration_minutes;
       const [h, m] = selected.time.split(":").map(Number);
       const endMinutes = h * 60 + m + duration;
       const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
 
-      const supabase = getSupabaseClient();
-      const { error } = await supabase.schema("crm").from("appointments").insert({
-        customer_id: selected.customer.id,
-        treatment_id: selected.treatment.id,
-        location,
-        date: selected.date,
-        start_time: selected.time,
-        end_time: endTime,
-        duration_minutes: duration,
-        price_eur: selected.treatment.price_eur,
-        status: "confirmed",
-        created_by: `salon:${salonName}`,
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/salon-book-appointment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: supabaseAnonKey,
+        },
+        body: JSON.stringify({
+          session_token: sessionToken,
+          customer_id: selected.customer.id,
+          treatment_id: selected.treatment.id,
+          location,
+          date: selected.date,
+          start_time: selected.time,
+          end_time: endTime,
+          duration_minutes: duration,
+          price_eur: selected.treatment.price_eur,
+        }),
       });
 
-      if (error) throw error;
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Buchung fehlgeschlagen");
 
       setBooked(true);
       showToast("Termin erfolgreich gebucht", "success");

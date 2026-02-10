@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
@@ -11,8 +12,9 @@ import { TreatmentLogModal } from './components/treatment-log-modal';
 import type { CustomerSearchResult } from '@/lib/types';
 
 export default function KundenPage() {
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState('');
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(searchParams.get('action') === 'new');
   const [editCustomer, setEditCustomer] = useState<CustomerSearchResult | null>(null);
   const [treatmentCustomer, setTreatmentCustomer] = useState<CustomerSearchResult | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);

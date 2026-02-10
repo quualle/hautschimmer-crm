@@ -24,7 +24,7 @@ import type { Customer, Appointment, PatientFile } from '@/lib/types';
 
 const locationLabel: Record<string, string> = {
   neumarkt: 'Neumarkt',
-  kw: 'Königstein-Wernberg',
+  kw: 'Königs Wusterhausen',
 };
 
 const statusConfig: Record<string, { label: string; variant: 'success' | 'warning' | 'danger' | 'default' }> = {
@@ -68,8 +68,9 @@ export default function KundenDetailPage() {
         if (th.ok && th.data?.timeline) {
           const extracted: PatientFile[] = [];
           for (const entry of th.data.timeline as Record<string, unknown>[]) {
-            if (entry.files && Array.isArray(entry.files)) {
-              extracted.push(...(entry.files as PatientFile[]));
+            const entryData = (entry.data as Record<string, unknown>) || entry;
+            if (entryData.files && Array.isArray(entryData.files)) {
+              extracted.push(...(entryData.files as PatientFile[]));
             }
           }
           setFiles(extracted);

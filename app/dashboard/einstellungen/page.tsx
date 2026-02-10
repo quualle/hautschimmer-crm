@@ -13,6 +13,18 @@ import type { Treatment, EmailTemplate } from '@/lib/types';
 
 // ========== Helpers ==========
 
+function sanitizeHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?>/gi, '')
+    .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/\bon\w+\s*=\s*[^\s>]*/gi, '')
+    .replace(/javascript\s*:/gi, '')
+    .replace(/data\s*:[^,]*;base64/gi, '');
+}
+
 const formatEur = (amount: number): string =>
   new Intl.NumberFormat('de-DE', {
     style: 'currency',
@@ -200,7 +212,7 @@ const TemplateList = () => {
                 <div
                   className="prose prose-sm max-h-96 overflow-y-auto"
                   dangerouslySetInnerHTML={{
-                    __html: previewTemplate.body_html,
+                    __html: sanitizeHtml(previewTemplate.body_html),
                   }}
                 />
               </div>

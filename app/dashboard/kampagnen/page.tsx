@@ -16,6 +16,18 @@ import type { Campaign } from '@/lib/types';
 
 // ========== Helpers ==========
 
+function sanitizeHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?>/gi, '')
+    .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/\bon\w+\s*=\s*[^\s>]*/gi, '')
+    .replace(/javascript\s*:/gi, '')
+    .replace(/data\s*:[^,]*;base64/gi, '');
+}
+
 const statusLabel: Record<string, string> = {
   draft: 'Entwurf',
   scheduled: 'Geplant',
@@ -146,7 +158,7 @@ const CampaignDetail = ({
           <p className="mb-2 text-xs font-medium text-foreground/50">Vorschau</p>
           <div
             className="prose prose-sm max-h-60 overflow-y-auto"
-            dangerouslySetInnerHTML={{ __html: campaign.body_html }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(campaign.body_html) }}
           />
         </div>
       )}

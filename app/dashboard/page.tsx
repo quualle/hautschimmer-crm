@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SkeletonCard } from "@/components/ui/skeleton";
-import { getRevenueStats, getDailySchedule } from "@/lib/api";
-import type { RevenueStats, DailyScheduleItem } from "@/lib/types";
+import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import { getRevenueStats, getDailySchedule, getUpcomingBirthdays } from "@/lib/api";
+import { TreatmentLogModal } from "@/app/dashboard/kunden/components/treatment-log-modal";
+import type { RevenueStats, DailyScheduleItem, BirthdayEntry } from "@/lib/types";
 
 // ========== Helpers ==========
 
@@ -219,22 +221,49 @@ const SunriseIcon = () => (
   </svg>
 );
 
+const CakeIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8" />
+    <path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1" />
+    <path d="M2 21h20" />
+    <path d="M7 8v3M12 8v3M17 8v3" />
+    <path d="M7 4h.01M12 4h.01M17 4h.01" />
+  </svg>
+);
+
 // ========== Dashboard Page ==========
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<RevenueStats | null>(null);
   const [schedule, setSchedule] = useState<DailyScheduleItem[] | null>(null);
+  const [birthdays, setBirthdays] = useState<BirthdayEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scheduleTab, setScheduleTab] = useState<"today" | "tomorrow">("today");
+
+  // Treatment log modal state
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<DailyScheduleItem | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [statsData, scheduleData] = await Promise.all([
+        const [statsData, scheduleData, birthdayData] = await Promise.all([
           getRevenueStats(),
           getDailySchedule(),
+          getUpcomingBirthdays(),
         ]);
         setStats(statsData);
         setSchedule(scheduleData);
+        setBirthdays(birthdayData);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Fehler beim Laden der Daten"
@@ -244,8 +273,42 @@ export default function DashboardPage() {
     load();
   }, []);
 
+  // Load schedule when tab switches (skip initial "today" since useEffect above handles it)
+  const handleTabSwitch = (tab: "today" | "tomorrow") => {
+    if (tab === scheduleTab) return;
+    setScheduleTab(tab);
+    setSchedule(null);
+    if (tab === "tomorrow") {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dateStr = tomorrow.toISOString().split("T")[0];
+      getDailySchedule(dateStr)
+        .then(setSchedule)
+        .catch(() => setSchedule([]));
+    } else {
+      getDailySchedule()
+        .then(setSchedule)
+        .catch(() => setSchedule([]));
+    }
+  };
+
   const confirmedCount =
     schedule?.filter((s) => s.status === "confirmed").length ?? 0;
+
+  const formatBirthday = (dob: string): string => {
+    const d = new Date(dob);
+    const birthday = new Date(new Date().getFullYear(), d.getMonth(), d.getDate());
+    return birthday.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" });
+  };
+
+  const getAge = (dob: string): number => {
+    const d = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - d.getFullYear();
+    const birthday = new Date(today.getFullYear(), d.getMonth(), d.getDate());
+    if (birthday > today) age--;
+    return age + 1; // upcoming age
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
@@ -303,13 +366,33 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Main Content: Schedule + Quick Actions */}
+      {/* Main Content: Schedule + Quick Actions + Birthdays */}
       <div className="grid gap-8 lg:grid-cols-5">
-        {/* Today's Schedule - 60% */}
+        {/* Schedule - 60% */}
         <div className="lg:col-span-3">
-          <h2 className="mb-4 font-serif text-lg font-semibold text-foreground">
-            Heutige Termine
-          </h2>
+          {/* Heute / Morgen Toggle */}
+          <div className="mb-4 flex items-center gap-1">
+            <button
+              onClick={() => handleTabSwitch("today")}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                scheduleTab === "today"
+                  ? "bg-primary/10 text-primary"
+                  : "text-foreground/50 hover:bg-muted hover:text-foreground/80"
+              }`}
+            >
+              Heute
+            </button>
+            <button
+              onClick={() => handleTabSwitch("tomorrow")}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                scheduleTab === "tomorrow"
+                  ? "bg-primary/10 text-primary"
+                  : "text-foreground/50 hover:bg-muted hover:text-foreground/80"
+              }`}
+            >
+              Morgen
+            </button>
+          </div>
 
           {schedule === null ? (
             <div className="space-y-3">
@@ -321,8 +404,8 @@ export default function DashboardPage() {
             <Card>
               <EmptyState
                 icon={<SunriseIcon />}
-                title="Keine Termine heute"
-                description="Genieße den freien Tag oder plane neue Termine."
+                title={scheduleTab === "today" ? "Keine Termine heute" : "Keine Termine morgen"}
+                description={scheduleTab === "today" ? "Genieße den freien Tag oder plane neue Termine." : "Morgen ist noch nichts geplant."}
               />
             </Card>
           ) : (
@@ -361,6 +444,35 @@ export default function DashboardPage() {
                         {item.duration_minutes} Min
                       </p>
                     </div>
+                    {/* Quick-Note Dropdown */}
+                    <DropdownMenu
+                      trigger={
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg text-foreground/40 transition-colors hover:bg-muted hover:text-foreground">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="5" r="2" />
+                            <circle cx="12" cy="12" r="2" />
+                            <circle cx="12" cy="19" r="2" />
+                          </svg>
+                        </span>
+                      }
+                      items={[
+                        {
+                          label: "Behandlung loggen",
+                          icon: <PenIcon />,
+                          onClick: () => {
+                            setSelectedAppointment(item);
+                            setShowLogModal(true);
+                          },
+                        },
+                        {
+                          label: "Kundenakte",
+                          icon: <UsersIcon />,
+                          onClick: () => {
+                            window.location.href = `/dashboard/kunden/${item.customer_id}`;
+                          },
+                        },
+                      ]}
+                    />
                   </div>
                 </Card>
               ))}
@@ -368,66 +480,121 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Quick Actions - 40% */}
-        <div className="lg:col-span-2">
-          <h2 className="mb-4 font-serif text-lg font-semibold text-foreground">
-            Schnellzugriff
-          </h2>
-          <div className="space-y-3">
-            <Link href="/dashboard/kunden?action=new">
-              <Card className="group cursor-pointer transition-colors hover:border-primary/40 hover:bg-primary/5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <UserPlusIcon />
+        {/* Right Column: Quick Actions + Birthdays */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* Quick Actions */}
+          <div>
+            <h2 className="mb-4 font-serif text-lg font-semibold text-foreground">
+              Schnellzugriff
+            </h2>
+            <div className="space-y-3">
+              <Link href="/dashboard/kunden?action=new">
+                <Card className="group cursor-pointer transition-colors hover:border-primary/40 hover:bg-primary/5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <UserPlusIcon />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground group-hover:text-primary">
+                        Neue Kundin anlegen
+                      </p>
+                      <p className="text-xs text-foreground/40">
+                        Kundenkartei erstellen
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground group-hover:text-primary">
-                      Neue Kundin anlegen
-                    </p>
-                    <p className="text-xs text-foreground/40">
-                      Kundenkartei erstellen
-                    </p>
+                </Card>
+              </Link>
+              <Link href="/dashboard/kunden">
+                <Card className="group cursor-pointer transition-colors hover:border-primary/40 hover:bg-primary/5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <PenIcon />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground group-hover:text-primary">
+                        Behandlung loggen
+                      </p>
+                      <p className="text-xs text-foreground/40">
+                        Kundin suchen & dokumentieren
+                      </p>
+                    </div>
                   </div>
+                </Card>
+              </Link>
+              <Link href="/dashboard/kampagnen?action=new">
+                <Card className="group cursor-pointer transition-colors hover:border-primary/40 hover:bg-primary/5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <MailIcon />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground group-hover:text-primary">
+                        Kampagne erstellen
+                      </p>
+                      <p className="text-xs text-foreground/40">
+                        E-Mail an Kundinnen senden
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+            </div>
+          </div>
+
+          {/* Birthday Widget */}
+          <div>
+            <h2 className="mb-4 font-serif text-lg font-semibold text-foreground">
+              Geburtstage diese Woche
+            </h2>
+            {birthdays === null ? (
+              <SkeletonCard />
+            ) : birthdays.length === 0 ? (
+              <Card>
+                <EmptyState
+                  icon={<CakeIcon />}
+                  title="Keine Geburtstage diese Woche"
+                  description=""
+                />
+              </Card>
+            ) : (
+              <Card padding="sm">
+                <div className="space-y-3">
+                  {birthdays.map((b) => (
+                    <div key={b.id} className="flex items-center gap-3">
+                      <Avatar name={`${b.first_name} ${b.last_name}`} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/dashboard/kunden/${b.id}`}
+                          className="truncate text-sm font-medium text-foreground hover:text-primary"
+                        >
+                          {b.first_name} {b.last_name}
+                        </Link>
+                        <p className="text-xs text-foreground/50">
+                          {formatBirthday(b.date_of_birth)} &middot; wird {getAge(b.date_of_birth)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </Card>
-            </Link>
-            <Link href="/dashboard/kunden">
-              <Card className="group cursor-pointer transition-colors hover:border-primary/40 hover:bg-primary/5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <PenIcon />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground group-hover:text-primary">
-                      Behandlung loggen
-                    </p>
-                    <p className="text-xs text-foreground/40">
-                      Kundin suchen & dokumentieren
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            </Link>
-            <Link href="/dashboard/kampagnen?action=new">
-              <Card className="group cursor-pointer transition-colors hover:border-primary/40 hover:bg-primary/5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <MailIcon />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground group-hover:text-primary">
-                      Kampagne erstellen
-                    </p>
-                    <p className="text-xs text-foreground/40">
-                      E-Mail an Kundinnen senden
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            </Link>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Treatment Log Modal */}
+      {selectedAppointment && (
+        <TreatmentLogModal
+          open={showLogModal}
+          onClose={() => {
+            setShowLogModal(false);
+            setSelectedAppointment(null);
+          }}
+          customerId={selectedAppointment.customer_id}
+          customerName={selectedAppointment.customer_name}
+        />
+      )}
     </div>
   );
 }

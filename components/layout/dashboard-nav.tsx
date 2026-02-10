@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { logout } from '@/lib/api';
+import { logout, getDailySchedule } from '@/lib/api';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const navItems = [
   {
@@ -17,6 +17,7 @@ const navItems = [
         <path d="M16 2v4M8 2v4M3 10h18" />
       </svg>
     ),
+    showBadge: true,
   },
   {
     href: '/dashboard/kalender',
@@ -61,10 +62,36 @@ const navItems = [
   },
 ];
 
+const locationOptions = [
+  { value: 'all', label: 'Alle Standorte' },
+  { value: 'neumarkt', label: 'Neumarkt' },
+  { value: 'kw', label: 'Königs Wusterhausen' },
+];
+
 export const DashboardNav = () => {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [todayCount, setTodayCount] = useState<number | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState('all');
+
+  // Load today's appointment count for badge
+  useEffect(() => {
+    getDailySchedule()
+      .then((items) => setTodayCount(items.length))
+      .catch(() => setTodayCount(null));
+  }, []);
+
+  // Load location from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('selected_location');
+    if (stored) setSelectedLocation(stored);
+  }, []);
+
+  const handleLocationChange = (val: string) => {
+    setSelectedLocation(val);
+    localStorage.setItem('selected_location', val);
+  };
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard';
@@ -119,6 +146,21 @@ export const DashboardNav = () => {
           <p className="text-xs text-foreground/50">CRM</p>
         </div>
 
+        {/* Location Selector */}
+        <div className="border-b border-border px-3 py-3">
+          <select
+            value={selectedLocation}
+            onChange={(e) => handleLocationChange(e.target.value)}
+            className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-xs outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+          >
+            {locationOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <nav className="flex flex-1 flex-col gap-1 p-3">
           {navItems.map((item) => (
             <Link
@@ -136,6 +178,11 @@ export const DashboardNav = () => {
                 {item.icon}
               </span>
               {item.label}
+              {item.showBadge && todayCount !== null && todayCount > 0 && (
+                <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">
+                  {todayCount}
+                </span>
+              )}
             </Link>
           ))}
         </nav>

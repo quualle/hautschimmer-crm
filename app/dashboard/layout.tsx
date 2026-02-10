@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { ToastContainer } from "@/components/ui/toast";
+import { GlobalSearch } from "@/components/global-search";
 
 export default async function DashboardLayout({
   children,
@@ -24,6 +25,7 @@ export default async function DashboardLayout({
         {children}
       </main>
       <ToastContainer />
+      <GlobalSearch />
     </div>
   );
 }
